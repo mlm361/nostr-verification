@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<rss version="2.0">
+  <channel>
+    <title>Nostr Feed</title>
+    <link>https://nostr.mitchelltribe.com</link>
+    <description>Posts from my Nostr account</description>
+  </channel>
+</rss>
