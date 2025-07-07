@@ -16,7 +16,7 @@
       max-width: 200px;
       margin-bottom: 1em;
     }
-    h1 {
+    h1, h2 {
       font-size: 1.8em;
       margin-bottom: 0.4em;
     }
@@ -37,6 +37,17 @@
       height: 24px;
       margin-right: 6px;
     }
+    .section {
+      margin-top: 3em;
+      border-top: 1px solid #ccc;
+      padding-top: 1.5em;
+    }
+    .social-links a {
+      margin: 0 10px;
+      text-decoration: none;
+      color: #0077cc;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -46,11 +57,32 @@
   <p>My NIP-05 identifier is:</p>
   <p><strong>michaelmitchell@verify.mitchelltribe.com</strong></p>
 
-<div style="margin-top: 2em;">
-  <a href="https://verify.mitchelltribe.com/nostr.xml" target="_blank" style="text-decoration: none; color: #e3701a; font-weight: bold; display: inline-block;">
-    <img src="rss_logo_icon_169778.png" alt="RSS Icon" style="width: 64px; height: 32px; display: block; margin: 0 auto 8px;" />
-    <span style="font-size: 1.2em;">Subscribe to my Nostr RSS feed</span>
-  </a>
-</div>
+  <div style="margin-top: 2em;">
+    <a href="https://verify.mitchelltribe.com/nostr.xml" target="_blank" style="text-decoration: none; color: #e3701a; font-weight: bold; display: inline-block;">
+      <img src="rss_logo_icon_169778.png" alt="RSS Icon" style="width: 64px; height: 32px; display: block; margin: 0 auto 8px;" />
+      <span style="font-size: 1.2em;">Subscribe to my Nostr RSS feed</span>
+    </a>
+  </div>
+
+  <div class="section">
+    <h2>Private Nostr Relay</h2>
+    <p>This site also hosts my private Nostr relay:</p>
+    <p><code>wss://nostr.mitchelltribe.com</code></p>
+    <p>
+      📤 <strong>Write access</strong>: <em>restricted</em> to my public key<br>
+      📥 <strong>Read access</strong>: open to everyone<br>
+      ✉️ <strong>DMs</strong>: supported (Kind 4)
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Contact & Social</h2>
+    <div class="social-links">
+      <a href="https://bsky.app/profile/mitchelltribe.com" target="_blank">Bluesky</a>
+      <a href="https://mitchelltribe.social/@michael" target="_blank">Mastodon</a>
+      <a href="https://mitchelltribe.rodeo/@michael" target="_blank">Sharkey</a>
+      <a href="mailto:michael@verify.mitchelltribe.com">Email Me</a>
+    </div>
+  </div>
 </body>
 </html>
