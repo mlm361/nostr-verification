@@ -1,128 +1,259 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Note Viewer - Mitchell Tribe</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            max-width: 700px;
-            margin: 50px auto;
-            padding: 20px;
-            line-height: 1.6;
-            background: #fff;
-        }
-        .note {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            background: #f9f9f9;
-        }
-        .loading { color: #666; }
-        .error { color: #c00; }
-        .content { white-space: pre-wrap; margin: 20px 0; }
-        img { max-width: 100%; height: auto; margin: 10px 0; border-radius: 4px; }
-        .meta { color: #666; font-size: 0.9em; border-top: 1px solid #ddd; padding-top: 15px; margin-top: 15px; }
-        a { color: #0066cc; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Note · Michael Mitchell</title>
+  <link rel="icon" type="image/webp" href="ostrich.webp">
+  <style>
+    :root {
+      --bg: #f6f5fb;
+      --card: #ffffff;
+      --ink: #1f1d2b;
+      --muted: #6b6880;
+      --line: #e7e4f0;
+      --primary: #7c3aed;
+      --primary-soft: #f1ebfd;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    main { max-width: 620px; margin: 0 auto; padding: 32px 16px 48px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 1px 2px rgba(31, 29, 43, .05), 0 6px 20px rgba(31, 29, 43, .06);
+      padding: 18px 20px;
+    }
+    .author { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .avatar {
+      width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
+      background: var(--primary-soft); flex: none;
+    }
+    .name { font-weight: 700; }
+    .nip05 { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+    .nip05::before { content: "✓ "; color: var(--primary); font-weight: 700; }
+    .content { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.05rem; }
+    .content a { color: var(--primary); text-decoration: none; }
+    .content a:hover { text-decoration: underline; }
+    .media img, .media video {
+      display: block; max-width: 100%; height: auto; margin-top: 12px;
+      border-radius: 10px; border: 1px solid var(--line);
+    }
+    .meta {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+      margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line);
+      color: var(--muted); font-size: .9rem;
+    }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .actions a {
+      padding: .4em .9em; border-radius: 999px; text-decoration: none; font-weight: 600;
+      border: 1px solid var(--line); color: var(--primary); background: var(--primary-soft);
+    }
+    .actions a.secondary { background: #fff; color: var(--muted); }
+    .status { color: var(--muted); text-align: center; padding: 24px 0; }
+    .error { color: #b42318; }
+    footer { text-align: center; margin-top: 16px; font-size: .85rem; }
+    footer a { color: var(--muted); }
+  </style>
 </head>
 <body>
-    <div class="note" id="note">
-        <p class="loading">Loading note...</p>
-    </div>
+  <main>
+    <article class="card" id="note">
+      <p class="status">Loading note…</p>
+    </article>
+    <footer><a href="/">verify.mitchelltribe.com</a></footer>
+  </main>
 
-    <script type="module">
-        const noteId = window.location.hash.substring(1);
-        
-        if (!noteId) {
-            document.getElementById('note').innerHTML = '<p class="error">No note ID in URL</p>';
+  <script type="module">
+    // Shows one of Michael's own Nostr notes. PEP links here as note.html#<hex event id>;
+    // note1… ids also work. Only notes signed by his key are shown, and the event id is
+    // re-hashed in the browser so a relay can't swap in different content.
+    const OWNER = '2f531285b31bf0143e6bedaed08d223a6d7b36755bd313c512789c7b92ae49fe';
+    const RELAYS = [
+      'wss://nostr.mitchelltribe.com',
+      'wss://relay.mitchelltribe.com',
+      'wss://nos.lol',
+      'wss://relay.damus.io',
+      'wss://relay.primal.net',
+    ];
+    const DITTO = 'https://ditto.mitchelltribe.com';
+    const box = document.getElementById('note');
+
+    // --- bech32 (NIP-19) ---
+    const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+    function polymod(values) {
+      const g = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+      let chk = 1;
+      for (const v of values) {
+        const b = chk >> 25;
+        chk = ((chk & 0x1ffffff) << 5) ^ v;
+        for (let i = 0; i < 5; i++) if ((b >> i) & 1) chk ^= g[i];
+      }
+      return chk;
+    }
+    const hrpExpand = h => [...[...h].map(c => c.charCodeAt(0) >> 5), 0, ...[...h].map(c => c.charCodeAt(0) & 31)];
+    function convertBits(data, from, to, pad) {
+      let acc = 0, bits = 0; const out = [], max = (1 << to) - 1;
+      for (const v of data) {
+        acc = (acc << from) | v; bits += from;
+        while (bits >= to) { bits -= to; out.push((acc >> bits) & max); }
+      }
+      if (pad && bits) out.push((acc << (to - bits)) & max);
+      return out;
+    }
+    function bech32Encode(hrp, hex) {
+      const bytes = hex.match(/../g).map(h => parseInt(h, 16));
+      const data = convertBits(bytes, 8, 5, true);
+      const mod = polymod([...hrpExpand(hrp), ...data, 0, 0, 0, 0, 0, 0]) ^ 1;
+      const chk = [...Array(6)].map((_, i) => (mod >> (5 * (5 - i))) & 31);
+      return hrp + '1' + [...data, ...chk].map(d => CHARSET[d]).join('');
+    }
+    function bech32DecodeHex(str) {
+      const s = str.toLowerCase(), pos = s.lastIndexOf('1');
+      const hrp = s.slice(0, pos), data = [...s.slice(pos + 1)].map(c => CHARSET.indexOf(c));
+      if (pos < 1 || data.includes(-1) || polymod([...hrpExpand(hrp), ...data]) !== 1) return null;
+      const bytes = convertBits(data.slice(0, -6), 5, 8, false);
+      return { hrp, hex: bytes.map(b => b.toString(16).padStart(2, '0')).join('') };
+    }
+
+    // --- helpers ---
+    const escapeHtml = t => t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    async function sha256Hex(text) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    async function idMatches(ev) {
+      const serial = JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]);
+      return (await sha256Hex(serial)) === ev.id;
+    }
+
+    // Ask every relay at once; the first valid answer wins.
+    function query(filter, accept, timeoutMs = 6000) {
+      return new Promise(resolve => {
+        let done = false, pending = RELAYS.length;
+        const sockets = [];
+        const finish = value => {
+          if (done) return; done = true;
+          sockets.forEach(ws => { try { ws.close(); } catch {} });
+          resolve(value);
+        };
+        setTimeout(() => finish(null), timeoutMs);
+        for (const url of RELAYS) {
+          let ws;
+          try { ws = new WebSocket(url); } catch { if (--pending === 0) finish(null); continue; }
+          sockets.push(ws);
+          ws.onopen = () => ws.send(JSON.stringify(['REQ', 'q', filter]));
+          ws.onmessage = async m => {
+            let d; try { d = JSON.parse(m.data); } catch { return; }
+            if (d[0] === 'EVENT' && d[1] === 'q' && await accept(d[2])) finish(d[2]);
+            if (d[0] === 'EOSE' || d[0] === 'CLOSED') { ws.close(); }
+          };
+          ws.onclose = () => { if (--pending === 0) finish(null); };
+        }
+      });
+    }
+
+    // Profiles are replaceable: gather what every relay has and keep the newest.
+    function queryLatest(filter, accept, timeoutMs = 4000) {
+      return new Promise(resolve => {
+        let best = null, pending = RELAYS.length;
+        const sockets = [];
+        const finish = () => { sockets.forEach(ws => { try { ws.close(); } catch {} }); resolve(best); };
+        const timer = setTimeout(finish, timeoutMs);
+        for (const url of RELAYS) {
+          let ws;
+          try { ws = new WebSocket(url); } catch { if (--pending === 0) { clearTimeout(timer); finish(); } continue; }
+          sockets.push(ws);
+          ws.onopen = () => ws.send(JSON.stringify(['REQ', 'p', filter]));
+          ws.onmessage = async m => {
+            let d; try { d = JSON.parse(m.data); } catch { return; }
+            if (d[0] === 'EVENT' && d[1] === 'p' && (!best || d[2].created_at > best.created_at) && await accept(d[2])) best = d[2];
+            if (d[0] === 'EOSE' || d[0] === 'CLOSED') ws.close();
+          };
+          ws.onclose = () => { if (--pending === 0) { clearTimeout(timer); finish(); } };
+        }
+      });
+    }
+
+    const MEDIA_IMG = /\.(?:jpe?g|png|gif|webp|avif)(?:\?\S*)?$/i;
+    const MEDIA_VID = /\.(?:mp4|webm|mov)(?:\?\S*)?$/i;
+    function render(text) {
+      const media = [];
+      const parts = text.split(/(https?:\/\/[^\s<>"']+|nostr:(?:npub|note|nevent|nprofile|naddr)1[02-9ac-hj-np-z]+|#[\p{L}\p{N}_]+)/u);
+      let html = '';
+      for (const part of parts) {
+        if (/^https?:\/\//.test(part)) {
+          const url = escapeHtml(part);
+          if (MEDIA_IMG.test(part)) media.push(`<img src="${url}" alt="Image from the note" loading="lazy">`);
+          else if (MEDIA_VID.test(part)) media.push(`<video src="${url}" controls preload="metadata"></video>`);
+          else html += `<a href="${url}" target="_blank" rel="noopener nofollow ugc">${url}</a>`;
+        } else if (part.startsWith('nostr:')) {
+          const id = escapeHtml(part.slice(6));
+          html += `<a href="${DITTO}/${id}" target="_blank" rel="noopener">${id.slice(0, 16)}…</a>`;
+        } else if (/^#[\p{L}\p{N}_]+$/u.test(part)) {
+          const tag = part.slice(1);
+          html += `<a href="${DITTO}/t/${encodeURIComponent(tag.toLowerCase())}" target="_blank" rel="noopener">#${escapeHtml(tag)}</a>`;
         } else {
-            loadNote(noteId);
+          html += escapeHtml(part);
         }
-        
-        async function loadNote(noteId) {
-            const relays = [
-                'wss://relay.mitchelltribe.com',
-                'wss://nos.lol',
-                'wss://relay.damus.io'
-            ];
-            
-            let noteFound = false;
-            
-            for (const relay of relays) {
-                if (noteFound) break;
-                
-                try {
-                    await new Promise((resolve, reject) => {
-                        const ws = new WebSocket(relay);
-                        const timeout = setTimeout(() => {
-                            ws.close();
-                            reject(new Error('Timeout'));
-                        }, 5000);
-                        
-                        ws.onopen = () => {
-                            ws.send(JSON.stringify(['REQ', 'note', { ids: [noteId] }]));
-                        };
-                        
-                        ws.onmessage = (event) => {
-                            const data = JSON.parse(event.data);
-                            if (data[0] === 'EVENT') {
-                                clearTimeout(timeout);
-                                displayNote(data[2]);
-                                noteFound = true;
-                                ws.close();
-                                resolve();
-                            }
-                        };
-                        
-                        ws.onerror = () => {
-                            clearTimeout(timeout);
-                            reject(new Error('Connection error'));
-                        };
-                    });
-                } catch (e) {
-                    console.log(`Failed to connect to ${relay}:`, e.message);
-                }
-            }
-            
-            if (!noteFound) {
-                document.getElementById('note').innerHTML = 
-                    `<p class="error">Could not load note.<br><a href="https://njump.me/${noteId}">View on njump.me</a></p>`;
-            }
-        }
-        
-        function displayNote(note) {
-            const content = note.content;
-            const date = new Date(note.created_at * 1000).toLocaleString();
-            
-            const imagePattern = /(https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp)(?:\?\S*)?)/gi;
-            const images = content.match(imagePattern) || [];
-            const text = content.replace(imagePattern, '').trim();
-            
-            let html = '';
-            
-            if (text) {
-                html += '<div class="content">' + escapeHtml(text) + '</div>';
-            }
-            
-            if (images.length > 0) {
-                images.forEach(url => {
-                    html += `<img src="${escapeHtml(url)}" alt="Image" loading="lazy" />`;
-                });
-            }
-            
-            html += `<div class="meta">Posted: ${date}<br>`;
-            html += `<a href="https://njump.me/${note.id}">View on other clients</a></div>`;
-            
-            document.getElementById('note').innerHTML = html;
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-    </script>
+      }
+      return { html: html.trim(), media };
+    }
+
+    function show(note, profile) {
+      const p = profile || {};
+      const name = escapeHtml(p.display_name || p.name || 'Michael Mitchell');
+      const nip05 = escapeHtml(p.nip05 || 'michaelmitchell@verify.mitchelltribe.com').replace('@', '@<wbr>');
+      const avatar = /^https:\/\//.test(p.picture || '') ? escapeHtml(p.picture) : 'ostrich.webp';
+      const when = new Date(note.created_at * 1000);
+      const { html, media } = render(note.content);
+      const noteId = bech32Encode('note', note.id);
+      document.title = `${p.display_name || p.name || 'Michael Mitchell'} on Nostr`;
+      box.innerHTML = `
+        <div class="author">
+          <img class="avatar" src="${avatar}" alt="" width="48" height="48">
+          <div><div class="name">${name}</div><div class="nip05">${nip05}</div></div>
+        </div>
+        <div class="content">${html}</div>
+        <div class="media">${media.join('')}</div>
+        <div class="meta">
+          <time datetime="${when.toISOString()}" title="${escapeHtml(when.toString())}">${escapeHtml(when.toLocaleString())}</time>
+          <div class="actions">
+            <a href="${DITTO}/${noteId}" target="_blank" rel="noopener">Open in Ditto</a>
+            <a class="secondary" href="https://njump.me/${noteId}" target="_blank" rel="noopener">Other apps</a>
+          </div>
+        </div>`;
+    }
+
+    function fail(message, id) {
+      const link = id ? `<br><a href="https://njump.me/${escapeHtml(id)}">Try njump.me</a>` : '';
+      box.innerHTML = `<p class="status error">${message}${link}</p>`;
+    }
+
+    let id = decodeURIComponent(location.hash.slice(1)).trim();
+    if (/^note1/i.test(id)) { const d = bech32DecodeHex(id); id = d && d.hrp === 'note' ? d.hex : ''; }
+    if (!/^[0-9a-f]{64}$/i.test(id)) {
+      fail('No note to show. The link should end with #&lt;note id&gt;.');
+    } else {
+      id = id.toLowerCase();
+      const [note, profile] = await Promise.all([
+        query({ ids: [id], authors: [OWNER] }, async ev => ev.id === id && ev.pubkey === OWNER && await idMatches(ev)),
+        queryLatest({ kinds: [0], authors: [OWNER], limit: 1 }, async ev => ev.pubkey === OWNER && ev.kind === 0 && await idMatches(ev)),
+      ]);
+      if (!note) fail('Could not find this note on my relays.', bech32Encode('note', id));
+      else {
+        let p = null; try { p = profile ? JSON.parse(profile.content) : null; } catch {}
+        show(note, p);
+      }
+    }
+  </script>
 </body>
 </html>
